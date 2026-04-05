@@ -1,7 +1,7 @@
 /** @file
   Gunyah SSDT restricted DMA pool updater.
 
-  Builds an SSDT with \_SB_.RDPA and \_SB_.RDPS based on
+  Builds an SSDT with \_SB_.RDMA device based on
   device tree compatible="restricted-dma-pool" reg.
 
   Copyright (c) 2026, Kancy Joe.
@@ -87,6 +87,8 @@ InstallRestrictedDmaPoolSsdt (VOID)
   UINT64                         Length;
   AML_ROOT_NODE_HANDLE           RootNode;
   AML_OBJECT_NODE_HANDLE         ScopeNode;
+  AML_OBJECT_NODE_HANDLE         DeviceNode;
+  AML_OBJECT_NODE_HANDLE         CrsNode;
   EFI_ACPI_DESCRIPTION_HEADER   *Table;
   EFI_ACPI_TABLE_PROTOCOL       *AcpiTableProtocol;
   UINTN                          TableKey;
@@ -115,16 +117,43 @@ InstallRestrictedDmaPoolSsdt (VOID)
     return Status;
   }
 
-  Status = AmlCodeGenNameInteger ("RDPA", BaseAddress, ScopeNode, NULL);
+  Status = AmlCodeGenDevice ("RDMA", ScopeNode, &DeviceNode);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "GunyahRestrictedDmaPool: AmlCodeGenNameInteger RDPA failed %r\n", Status));
+    DEBUG ((DEBUG_ERROR, "GunyahRestrictedDmaPool: AmlCodeGenDevice RDMA failed %r\n", Status));
     AmlDeleteTree (RootNode);
     return Status;
   }
 
-  Status = AmlCodeGenNameInteger ("RDPS", Length, ScopeNode, NULL);
+  Status = AmlCodeGenNameString ("_HID", "RDMA0000", DeviceNode, NULL);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "GunyahRestrictedDmaPool: AmlCodeGenNameInteger RDPS failed %r\n", Status));
+    DEBUG ((DEBUG_ERROR, "GunyahRestrictedDmaPool: AmlCodeGenNameString _HID failed %r\n", Status));
+    AmlDeleteTree (RootNode);
+    return Status;
+  }
+
+  Status = AmlCodeGenNameInteger ("_STA", 0x0F, DeviceNode, NULL);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "GunyahRestrictedDmaPool: AmlCodeGenNameInteger _STA failed %r\n", Status));
+    AmlDeleteTree (RootNode);
+    return Status;
+  }
+
+  Status = AmlCodeGenNameResourceTemplate ("_CRS", DeviceNode, &CrsNode);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "GunyahRestrictedDmaPool: AmlCodeGenNameResourceTemplate _CRS failed %r\n", Status));
+    AmlDeleteTree (RootNode);
+    return Status;
+  }
+
+  Status = AmlCodeGenRdMemory32Fixed (
+             TRUE,
+             (UINT32)BaseAddress,
+             (UINT32)Length,
+             CrsNode,
+             NULL
+             );
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "GunyahRestrictedDmaPool: AmlCodeGenRdMemory32Fixed failed %r\n", Status));
     AmlDeleteTree (RootNode);
     return Status;
   }
@@ -150,7 +179,7 @@ InstallRestrictedDmaPoolSsdt (VOID)
     return Status;
   }
 
-  DEBUG ((DEBUG_INFO, "GunyahRestrictedDmaPool: SSDT installed (TableKey=0x%lx) RDPA=0x%lx RDPS=0x%lx\n", TableKey, BaseAddress, Length));
+  DEBUG ((DEBUG_INFO, "GunyahRestrictedDmaPool: SSDT installed (TableKey=0x%lx) RDMA base=0x%lx size=0x%lx\n", TableKey, BaseAddress, Length));
   FreePool (Table);
 
   return EFI_SUCCESS;
