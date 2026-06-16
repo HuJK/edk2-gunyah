@@ -7,13 +7,15 @@ on:
 
 jobs:
   build:
-    name: Build (${{ matrix.build_type }})
+    name: Build (${{ matrix.build_type }}, ${{ matrix.pci_mode }})
     runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
         build_type: [DEBUG, RELEASE]
+        pci_mode: [CAM, ECAM]
     env:
       EDK2_TARGET: ${{ matrix.build_type }}
+      PCI_CAM_MODE: ${{ matrix.pci_mode == 'CAM' && 'TRUE' || 'FALSE' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -30,21 +32,22 @@ jobs:
           chmod +x ./build.sh
           set -e
           echo "Build type: $EDK2_TARGET"
-          ./build.sh
+          echo "PCI mode: ${{ matrix.pci_mode }} (-DPCI_CAM_MODE=$PCI_CAM_MODE)"
+          ./build.sh -DPCI_CAM_MODE="$PCI_CAM_MODE"
 
       - name: Prepare artifacts
         run: |
           set -e
           ART1=edk2-gunyah.fd
           ART2=edk2-gunyah.vars.fd
-          if [ -f "$ART1" ]; then cp "$ART1" "edk2-gunyah-${EDK2_TARGET}.fd"; fi
-          if [ -f "$ART2" ]; then cp "$ART2" "edk2-gunyah-${EDK2_TARGET}.vars.fd"; fi
+          if [ -f "$ART1" ]; then cp "$ART1" "edk2-gunyah-${EDK2_TARGET}-${{ matrix.pci_mode }}.fd"; fi
+          if [ -f "$ART2" ]; then cp "$ART2" "edk2-gunyah-${EDK2_TARGET}-${{ matrix.pci_mode }}.vars.fd"; fi
           ls -la
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: edk2-gunyah-${{ matrix.build_type }}
+          name: edk2-gunyah-${{ matrix.build_type }}-${{ matrix.pci_mode }}
           path: |
-            edk2-gunyah-${{ matrix.build_type }}.fd
-            edk2-gunyah-${{ matrix.build_type }}.vars.fd
+            edk2-gunyah-${{ matrix.build_type }}-${{ matrix.pci_mode }}.fd
+            edk2-gunyah-${{ matrix.build_type }}-${{ matrix.pci_mode }}.vars.fd
