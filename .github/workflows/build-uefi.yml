@@ -4,6 +4,12 @@ on:
   push:
     branches: [ master ]
   workflow_dispatch:
+    inputs:
+      prebuilt_root_branch:
+        description: "Target branch in DroidVM-Prebuilt-Root."
+        required: false
+        default: droidvm
+        type: string
 
 jobs:
   build:
@@ -16,6 +22,7 @@ jobs:
     env:
       EDK2_TARGET: ${{ matrix.build_type }}
       PCI_CAM_MODE: ${{ matrix.pci_mode == 'CAM' && 'TRUE' || 'FALSE' }}
+      PREBUILT_ROOT_BRANCH: ${{ inputs.prebuilt_root_branch || 'droidvm' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -43,6 +50,68 @@ jobs:
           if [ -f "$ART1" ]; then cp "$ART1" "edk2-gunyah-${EDK2_TARGET}-${{ matrix.pci_mode }}.fd"; fi
           if [ -f "$ART2" ]; then cp "$ART2" "edk2-gunyah-${EDK2_TARGET}-${{ matrix.pci_mode }}.vars.fd"; fi
           ls -la
+
+      - name: Prepare DroidVM-Prebuilt-Root
+        if: matrix.build_type == 'RELEASE' && matrix.pci_mode == 'ECAM'
+        env:
+          TARGET_REPO: Droid-VM/DroidVM-Prebuilt-Root
+          GH_TOKEN: ${{ secrets.PREBUILTS_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Missing secret PREBUILTS_TOKEN with write access to ${TARGET_REPO}"
+            exit 1
+          fi
+
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          target_url="https://x-access-token:${GH_TOKEN}@github.com/${TARGET_REPO}.git"
+          default_branch="$(
+            git ls-remote --symref "$target_url" HEAD \
+              | awk '/^ref:/ { sub("refs/heads/", "", $2); print $2; exit }'
+          )"
+
+          if [ -z "$default_branch" ]; then
+            echo "::error::Unable to detect default branch for ${TARGET_REPO}"
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --heads "$target_url" "$PREBUILT_ROOT_BRANCH" >/dev/null 2>&1; then
+            git clone --depth 1 --branch "$PREBUILT_ROOT_BRANCH" "$target_url" prebuilt-root
+          else
+            git clone --depth 1 --branch "$default_branch" "$target_url" prebuilt-root
+            git -C prebuilt-root switch -c "$PREBUILT_ROOT_BRANCH"
+          fi
+
+      - name: Update DroidVM-Prebuilt-Root edk2 files
+        if: matrix.build_type == 'RELEASE' && matrix.pci_mode == 'ECAM'
+        run: |
+          set -euo pipefail
+
+          install -Dm644 edk2-gunyah.fd prebuilt-root/arm64-v8a/usr/share/droidvm/edk2-gunyah.fd
+          install -Dm644 edk2-gunyah.vars.fd prebuilt-root/arm64-v8a/usr/share/droidvm/edk2-gunyah.vars.fd
+
+      - name: Commit and push DroidVM-Prebuilt-Root edk2 files
+        if: matrix.build_type == 'RELEASE' && matrix.pci_mode == 'ECAM'
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          cd prebuilt-root
+          git add \
+            arm64-v8a/usr/share/droidvm/edk2-gunyah.fd \
+            arm64-v8a/usr/share/droidvm/edk2-gunyah.vars.fd
+
+          if git diff --cached --quiet; then
+            echo "No DroidVM-Prebuilt-Root edk2 file changes to publish."
+            exit 0
+          fi
+
+          git commit -m "Update edk2-gunyah firmware from ${SOURCE_SHA}"
+          git push origin "HEAD:${PREBUILT_ROOT_BRANCH}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
