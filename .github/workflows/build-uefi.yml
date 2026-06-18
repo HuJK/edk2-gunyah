@@ -90,8 +90,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          install -Dm644 edk2-gunyah.fd prebuilt-root/arm64-v8a/usr/share/droidvm/edk2-gunyah.fd
-          install -Dm644 edk2-gunyah.vars.fd prebuilt-root/arm64-v8a/usr/share/droidvm/edk2-gunyah.vars.fd
+          install -Dm644 edk2-gunyah.fd prebuilt-root/manual-build/arm64-v8a/usr/share/droidvm/edk2-gunyah.fd
+          install -Dm644 edk2-gunyah.vars.fd prebuilt-root/manual-build/arm64-v8a/usr/share/droidvm/edk2-gunyah.vars.fd
 
       - name: Commit and push DroidVM-Prebuilt-Root edk2 files
         if: matrix.build_type == 'RELEASE' && matrix.pci_mode == 'ECAM'
@@ -102,8 +102,8 @@ jobs:
 
           cd prebuilt-root
           git add \
-            arm64-v8a/usr/share/droidvm/edk2-gunyah.fd \
-            arm64-v8a/usr/share/droidvm/edk2-gunyah.vars.fd
+            manual-build/arm64-v8a/usr/share/droidvm/edk2-gunyah.fd \
+            manual-build/arm64-v8a/usr/share/droidvm/edk2-gunyah.vars.fd
 
           if git diff --cached --quiet; then
             echo "No DroidVM-Prebuilt-Root edk2 file changes to publish."
