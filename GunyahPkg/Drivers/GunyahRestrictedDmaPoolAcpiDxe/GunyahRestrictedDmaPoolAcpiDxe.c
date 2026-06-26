@@ -145,15 +145,27 @@ InstallRestrictedDmaPoolSsdt (VOID)
     return Status;
   }
 
-  Status = AmlCodeGenRdMemory32Fixed (
-             TRUE,
-             (UINT32)BaseAddress,
-             (UINT32)Length,
+  Status = AmlCodeGenRdQWordMemory (
+             TRUE,                        // IsResourceConsumer
+             TRUE,                        // IsPosDecode
+             TRUE,                        // IsMinFixed
+             TRUE,                        // IsMaxFixed
+             AmlMemoryNonCacheable,       // Cacheable
+             TRUE,                        // IsReadWrite
+             0,                           // AddressGranularity
+             BaseAddress,                 // AddressMinimum
+             BaseAddress + Length - 1,    // AddressMaximum
+             0,                           // AddressTranslation
+             Length,                      // RangeLength
+             0,                           // ResourceSourceIndex
+             NULL,                        // ResourceSource
+             AmlAddressRangeMemory,       // MemoryRangeType
+             TRUE,                        // IsTypeStatic
              CrsNode,
              NULL
              );
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "GunyahRestrictedDmaPool: AmlCodeGenRdMemory32Fixed failed %r\n", Status));
+    DEBUG ((DEBUG_ERROR, "GunyahRestrictedDmaPool: AmlCodeGenRdQWordMemory failed %r\n", Status));
     AmlDeleteTree (RootNode);
     return Status;
   }
